@@ -10,6 +10,24 @@ Sends a UDP message either unicast or broadcast.
 #include "config.h"
 
 
+//setsockopt( sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv);
+int
+set_sock_recv_timeout(SOCKET lsock, int secs)
+{
+    int ret=-1;
+    struct timeval tv;
+
+    tv.tv_sec = secs;
+    tv.tv_usec = 0;
+    if ( (ret=setsockopt(lsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(tv)) ) < 0)
+    {
+
+    }
+//    DEBUG1("set recv timeout ret %d\n",ret);
+    return(ret);
+}
+
+
 void usage(int argc, char **argv)
 {
   printf("usage: %s [-p port] [-h host] [-v(erbose)] [-b(roadcast)] [-?(this message)] message to send\n",argv[0]);
@@ -20,13 +38,14 @@ void usage(int argc, char **argv)
 int main(int argc, char *argv[])
 {
 	int					ci,verbose=0,send_broadcast=0;
-	int					ret,sd;
+	int					ret,sd,slen;
 	U16					destport;
 	struct sockaddr_in			server;
 	struct hostent				*host_info;
 	IPADDR					ip;
 	char					message[4096];
 	int broadcast = 1;	
+    int receive = 0;
 
 	// Set defaults
 	ip.ipb1=127;
@@ -107,6 +126,10 @@ int main(int argc, char *argv[])
 			// Verbose
 			verbose=1;
 			printf("verbose on\n");
+		}
+		else if(0 == strncmp(argv[ci], "-r", 2))
+		{
+		    receive=1;
 		}
 		else if(0 == strncmp(argv[ci], "-?", 2))
 		{
@@ -195,6 +218,14 @@ int main(int argc, char *argv[])
 			} 
 		}
 
+
+        //memset((void *)&server, '\0', sizeof(struct sockaddr_in));
+       // server.sin_family       = AF_INET;
+        //server.sin_addr.s_addr  = INADDR_ANY;
+        //server.sin_port         = 0;
+        //ret=bind(sd, (struct sockaddr *)&client, sizeof(struct sockaddr_in));
+
+        memset((void *)&server, '\0', sizeof(struct sockaddr_in));
 		server.sin_family		= AF_INET;
 		server.sin_addr.s_addr		= ip.ip32;
 		server.sin_port			= htons((U16)(destport));
@@ -216,6 +247,20 @@ int main(int argc, char *argv[])
 				else
 					printf("sent to %d.%d.%d.%d:%d the message : %s\n",ip.ipb1,ip.ipb2,ip.ipb3,ip.ipb4,destport,message);
 			}
+           
+            if(receive)
+            {
+                set_sock_recv_timeout(sd, 2);
+                memset((void *)&server, '\0', sizeof(struct sockaddr_in));
+			    slen=sizeof(struct sockaddr_in);
+			    ret=recvfrom(sd, (char *)message, 1024-1, 0, (struct sockaddr *)&server, (socklen_t *) &slen);
+                if(ret>0)
+                    printf("%s\n",message);
+                else
+                    printf("ERR: timeout\n");
+            }
+
+
 			exit(0);	
 		}
 	}
@@ -224,6 +269,7 @@ int main(int argc, char *argv[])
 		usage(argc,argv);
 	}
 
+    
 
 	exit(0);
 
